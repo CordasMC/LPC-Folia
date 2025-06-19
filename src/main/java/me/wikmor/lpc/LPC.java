@@ -60,11 +60,13 @@ public final class LPC extends JavaPlugin implements Listener {
 		final String message = event.getMessage();
 		final Player player = event.getPlayer();
 
-		// Get a LuckPerms cached metadata for the player.
-		final CachedMetaData metaData = this.luckPerms.getPlayerAdapter(Player.class).getMetaData(player);
-		final String group = metaData.getPrimaryGroup();
+		// Folia: Schedule all Bukkit API calls on the player's scheduler (main thread)
+		player.getScheduler().run(this, scheduledTask -> {
+			// Get a LuckPerms cached metadata for the player.
+			final CachedMetaData metaData = this.luckPerms.getPlayerAdapter(Player.class).getMetaData(player);
+			final String group = metaData.getPrimaryGroup();
 
-		String format = getConfig().getString(getConfig().getString("group-formats." + group) != null ? "group-formats." + group : "chat-format")
+			String format = getConfig().getString(getConfig().getString("group-formats." + group) != null ? "group-formats." + group : "chat-format")
 				.replace("{prefix}", metaData.getPrefix() != null ? metaData.getPrefix() : "")
 				.replace("{suffix}", metaData.getSuffix() != null ? metaData.getSuffix() : "")
 				.replace("{prefixes}", metaData.getPrefixes().keySet().stream().map(key -> metaData.getPrefixes().get(key)).collect(Collectors.joining()))
@@ -75,11 +77,15 @@ public final class LPC extends JavaPlugin implements Listener {
 				.replace("{username-color}", metaData.getMetaValue("username-color") != null ? metaData.getMetaValue("username-color") : "")
 				.replace("{message-color}", metaData.getMetaValue("message-color") != null ? metaData.getMetaValue("message-color") : "");
 
-		format = colorize(translateHexColorCodes(getServer().getPluginManager().isPluginEnabled("PlaceholderAPI") ? PlaceholderAPI.setPlaceholders(player, format) : format));
+			format = colorize(translateHexColorCodes(getServer().getPluginManager().isPluginEnabled("PlaceholderAPI") ? PlaceholderAPI.setPlaceholders(player, format) : format));
 
-		event.setFormat(format.replace("{message}", player.hasPermission("lpc.colorcodes") && player.hasPermission("lpc.rgbcodes")
+			String formattedMessage = format.replace("{message}", player.hasPermission("lpc.colorcodes") && player.hasPermission("lpc.rgbcodes")
 				? colorize(translateHexColorCodes(message)) : player.hasPermission("lpc.colorcodes") ? colorize(message) : player.hasPermission("lpc.rgbcodes")
-				? translateHexColorCodes(message) : message).replace("%", "%%"));
+				? translateHexColorCodes(message) : message).replace("%", "%%");
+
+			// Set the format on the main thread
+			event.setFormat(formattedMessage);
+		}, null);
 	}
 
 	private String colorize(final String message) {
